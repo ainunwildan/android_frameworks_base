@@ -30,6 +30,7 @@ import com.android.internal.telephony.AdnRecord;
 import com.android.internal.telephony.AdnRecordCache;
 import com.android.internal.telephony.AdnRecordLoader;
 import com.android.internal.telephony.BaseCommands;
+import com.android.internal.telephony.CommandException;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.IccCard;
 import com.android.internal.telephony.IccFileHandler;
@@ -151,6 +152,7 @@ public class SIMRecords extends IccRecords {
     private static final int EVENT_SIM_REFRESH = 31;
     private static final int EVENT_GET_CFIS_DONE = 32;
     private static final int EVENT_GET_CSP_CPHS_DONE = 33;
+    private static final int EVENT_GET_IMSI_RETRY = 800;
 
     // Lookup table for carriers known to produce SIMs which incorrectly indicate MNC length.
 
@@ -540,6 +542,14 @@ public class SIMRecords extends IccRecords {
 
                 if (ar.exception != null) {
                     loge("Exception querying IMSI, Exception:" + ar.exception);
+                    CommandException.Error err=null;
+                    if (ar.exception instanceof CommandException) {
+                        err = ((CommandException)(ar.exception)).getCommandError();
+                    }
+                    if (err == CommandException.Error.GENERIC_FAILURE)
+                    {
+                        sendMessageDelayed(obtainMessage(EVENT_GET_IMSI_RETRY), 500);
+                    }
                     break;
                 }
 
@@ -583,6 +593,10 @@ public class SIMRecords extends IccRecords {
                 }
                 mParentCard.broadcastIccStateChangedIntent(
                         IccCard.INTENT_VALUE_ICC_IMSI, null);
+            break;
+
+            case EVENT_GET_IMSI_RETRY:
+                mCi.getIMSIForApp(mParentCard.getAid(), obtainMessage(EVENT_GET_IMSI_DONE));
             break;
 
             case EVENT_GET_MBI_DONE:
